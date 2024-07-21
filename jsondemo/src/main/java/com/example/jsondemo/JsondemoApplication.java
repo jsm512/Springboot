@@ -26,7 +26,7 @@ public class JsondemoApplication {
 
 	@RestController
 	public static class ApiController {
-		private final String DATA_DIR = "data/input/records.json";
+		private final String DATA_DIR = "data/input/pages.json";
 		private final ObjectMapper objectMapper = new ObjectMapper();
 
 		@GetMapping("/api/gamerecord/users")
