@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
@@ -26,11 +27,14 @@ public class JsondemoApplication {
 
 	@RestController
 	public static class ApiController {
-		private final String DATA_DIR = "data/input/pages.json";
+		private final String DATA_DIR = "data/input/users.json";
 		private final ObjectMapper objectMapper = new ObjectMapper();
 
-		@GetMapping("/api/gamerecord/users")
-		public ResponseEntity<List<UserDTO>> getUsers() {
+		@GetMapping("/api/users")
+		public ResponseEntity<Object> getUsers(
+				@RequestParam(value = "page", defaultValue = "0") int page,
+				@RequestParam(value = "size", defaultValue = "10") int size,
+				@RequestParam(value = "sort", required = false) String sort) {
 			try {
 				ClassPathResource resource = new ClassPathResource(DATA_DIR);
 				List<User> users = objectMapper.readValue(
@@ -38,12 +42,17 @@ public class JsondemoApplication {
 						new TypeReference<List<User>>() {
 
 						});
-				List<UserDTO> sortedUsers = users.stream()
-						.map(user -> new UserDTO(user.getUsername(), user.getTag()))
-						.sorted(Comparator.comparing(UserDTO::getUsername)
-								.thenComparing(UserDTO::getTag))
+
+				List<User> sortedUsers = users.stream()
+						.skip(page * size)
+						.limit(size)
 						.collect(Collectors.toList());
-				System.out.println("Response:" + sortedUsers);
+				if (sort != null && !sort.trim().isEmpty()) {
+					sortedUsers = sortedUsers.stream()
+							.sorted(getComparator(sort))
+							.collect(Collectors.toList());
+				}
+				System.out.println(sortedUsers);
 				return ResponseEntity.ok(sortedUsers);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -51,42 +60,16 @@ public class JsondemoApplication {
 			}
 		}
 
-		@GetMapping("/api/gamerecord/winrate")
-		public ResponseEntity<Object> getWinrate(
-				@RequestParam(value = "username", required = false) String username,
-				@RequestParam(value = "tag", required = false) String tag) {
-
-			if (username == null || tag == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-						.body(new ErrorDTO("Invalid data format"));
-			}
-			try {
-				ClassPathResource resource = new ClassPathResource(DATA_DIR);
-				List<User> users = objectMapper.readValue(
-						resource.getInputStream(),
-						new TypeReference<List<User>>() {
-
-						});
-				Optional<User> userOpt = users.stream()
-						.filter(user -> username.equals(user.getUsername()) && tag.equals(user.getTag()))
-						.findFirst();
-				if (userOpt.isEmpty()) {
-					return ResponseEntity.status(HttpStatus.NOT_FOUND)
-							.body(new ErrorDTO("Data not found"));
-				}
-				User user = userOpt.get();
-				int winCount = (int) user.getWin();
-				int loseCount = (int) user.getLose();
-				int totalGames = winCount + loseCount;
-				int winRate = (int) ((winCount / (double) totalGames) * 100);
-
-				WinrateDTO winrateDTO = new WinrateDTO(winRate);
-
-				System.out.println("Response: " + winRate);
-				return ResponseEntity.ok(winrateDTO);
-			} catch (IOException e) {
-				e.printStackTrace();
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+		private Comparator<User> getComparator(String sort) {
+			switch (sort) {
+				case "username":
+					return Comparator.comparing(User::getUsername);
+				case "user_id":
+					return Comparator.comparingLong(User::getUser_id);
+				case "post_count":
+					return Comparator.comparingInt(User::getPost_count);
+				default:
+					return Comparator.comparing(User::getUsername);
 			}
 		}
 	}

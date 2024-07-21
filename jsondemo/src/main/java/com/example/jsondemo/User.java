@@ -4,43 +4,30 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class User {
-    private int id;
-    private String username;
-    private String tag;
-    private long win;
-    private long lose;
+    private long user_id;
 
-    public int getId() {
-        return id;
+    private String username;
+    private int post_count;
+
+    public long getUser_id() {
+        return user_id;
     }
 
     public String getUsername() {
         return username;
     }
 
-    public String getTag() {
-        return tag;
-    }
-
-    public long getWin() {
-        return win;
-    }
-
-    public long getLose() {
-        return lose;
+    public int getPost_count() {
+        return post_count;
     }
 
     @JsonCreator
     public User(
-            @JsonProperty("id") int id,
+            @JsonProperty("user_id") long user_id,
             @JsonProperty("username") String username,
-            @JsonProperty("tag") String tag,
-            @JsonProperty("win") long win,
-            @JsonProperty("lose") long lose) {
-        this.id = id;
+            @JsonProperty("post_count") int post_count) {
+        this.user_id = user_id;
         this.username = username;
-        this.tag = tag;
-        this.win = win;
-        this.lose = lose;
+        this.post_count = post_count;
     }
 }
