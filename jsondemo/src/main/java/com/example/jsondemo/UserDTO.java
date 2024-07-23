@@ -3,7 +3,7 @@ package com.example.jsondemo;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 
-@JacksonXmlRootElement(name = "users")
+@JacksonXmlRootElement(localName = "users")
 public class UserDTO {
 
     private int id;
