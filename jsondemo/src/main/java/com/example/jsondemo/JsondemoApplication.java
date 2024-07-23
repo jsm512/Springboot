@@ -30,7 +30,7 @@ public class JsondemoApplication {
 
 		@GetMapping("/api/users")
 		public ResponseEntity<Object> getUsers(
-				@RequestParam(value = "page", defaultValue = "0") int page,
+				@RequestParam(value = "page", defaultValue = "2") int page,
 				@RequestParam(value = "size", defaultValue = "10") int size,
 				@RequestParam(value = "sort", required = false) String sort) {
 			try {
@@ -49,6 +49,10 @@ public class JsondemoApplication {
 					sortedUsers = sortedUsers.stream()
 							.sorted(getComparator(sort))
 							.collect(Collectors.toList());
+				}
+				if (sortedUsers.isEmpty()) {
+					return ResponseEntity.status(HttpStatus.NOT_FOUND)
+							.body(new ErrorDTO("data not found"));
 				}
 				System.out.println(sortedUsers);
 				return ResponseEntity.ok(sortedUsers);
