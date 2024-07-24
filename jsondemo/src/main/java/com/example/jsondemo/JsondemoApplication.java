@@ -2,19 +2,15 @@ package com.example.jsondemo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.web.bind.annotation.*;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
@@ -26,65 +22,56 @@ public class JsondemoApplication {
 
 	@RestController
 	public static class ApiController {
-		private final String DATA_DIR = "data/input/records.json";
-		private final ObjectMapper objectMapper = new ObjectMapper();
 
-		@GetMapping("/api/gamerecord/users")
-		public ResponseEntity<List<UserDTO>> getUsers() {
+		@PostMapping("/process-data")
+		public ResponseEntity<List<Map<String, Object>>> processData(@RequestBody List<Map<String, Object>> data) {
 			try {
-				ClassPathResource resource = new ClassPathResource(DATA_DIR);
-				List<User> users = objectMapper.readValue(
-						resource.getInputStream(),
-						new TypeReference<List<User>>() {
+				List<Map<String, Object>> transformedData = data.stream()
+						.filter(entry -> {
+							Object ageObj = entry.get("age");
+							int age = ((Number) ageObj).intValue();
+							return age >= 30 ? true : false;
+						})
+						.map(entry -> {
+							Map<String, Object> result = entry.entrySet().stream()
+									.filter(e -> !e.getKey().equals("age") && !e.getKey().equals("email"))
+									.collect(Collectors.toMap(
+											e -> {
+												switch (e.getKey()) {
+													case "name":
+														return "fullName";
+													case "occupation":
+														return "job";
+													case "location":
+														return "city";
+													default:
+														return e.getKey();
+												}
+											},
+											Map.Entry::getValue,
+											(oldValue, newValue) -> newValue,
+											LinkedHashMap::new));
 
-						});
-				List<UserDTO> sortedUsers = users.stream()
-						.map(user -> new UserDTO(user.getUsername(), user.getTag()))
-						.sorted(Comparator.comparing(UserDTO::getUsername)
-								.thenComparing(UserDTO::getTag))
+							// Ensure the order of fields
+							Map<String, Object> orderedResult = new LinkedHashMap<>();
+							orderedResult.put("fullName", result.get("fullName"));
+							orderedResult.put("job", result.get("job"));
+							orderedResult.put("city", result.get("city"));
+
+							return orderedResult;
+						})
 						.collect(Collectors.toList());
-				System.out.println("Response:" + sortedUsers);
-				return ResponseEntity.ok(sortedUsers);
-			} catch (IOException e) {
-				e.printStackTrace();
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-			}
-		}
-
-		@GetMapping("/api/gamerecord/winrate")
-		public ResponseEntity<Object> getWinrate(
-				@RequestParam(value = "username", required = false) String username,
-				@RequestParam(value = "tag", required = false) String tag) {
-
-			if (username == null || tag == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-						.body(new ErrorDTO("Invalid data format"));
-			}
-			try {
-				ClassPathResource resource = new ClassPathResource(DATA_DIR);
-				List<User> users = objectMapper.readValue(
-						resource.getInputStream(),
-						new TypeReference<List<User>>() {
-
-						});
-				Optional<User> userOpt = users.stream()
-						.filter(user -> username.equals(user.getUsername()) && tag.equals(user.getTag()))
-						.findFirst();
-				if (userOpt.isEmpty()) {
-					return ResponseEntity.status(HttpStatus.NOT_FOUND)
-							.body(new ErrorDTO("Data not found"));
-				}
-				User user = userOpt.get();
-				int winCount = (int) user.getWin();
-				int loseCount = (int) user.getLose();
-				int totalGames = winCount + loseCount;
-				int winRate = (int) ((winCount / (double) totalGames) * 100);
-
-				WinrateDTO winrateDTO = new WinrateDTO(winRate);
-
-				System.out.println("Response: " + winRate);
-				return ResponseEntity.ok(winrateDTO);
-			} catch (IOException e) {
+				Map<String, Long> occupationCounts = transformedData.stream()
+						.map(entry -> entry.get("job"))
+						.map(Object::toString)
+						.collect(Collectors.groupingBy(
+								occupation -> occupation,
+								Collectors.counting()));
+				List<Map<String, Object>> response = new ArrayList<>();
+				response.add(Collections.singletonMap("transformedUsers", transformedData));
+				response.add(Collections.singletonMap("occupation", occupationCounts));
+				return ResponseEntity.ok(response);
+			} catch (Exception e) {
 				e.printStackTrace();
 				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 			}
