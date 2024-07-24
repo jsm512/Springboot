@@ -2,17 +2,13 @@ package com.example.jsondemo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.web.bind.annotation.*;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.util.List;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
@@ -24,36 +20,62 @@ public class JsondemoApplication {
 
 	@RestController
 	public static class ApiController {
-		private final String DATA_DIR = "data/xml/users.xml";
-		private final XmlMapper xmlMapper = new XmlMapper();
 
-		@GetMapping("/api/users")
-		public ResponseEntity<Object> getUsers(
-				@RequestParam(value = "userName", required = false) String userName) {
-			if (userName == null) {
-				return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-						.body(new ErrorDTO("Invalid data format"));
-			}
+		@PostMapping("/merge-urls")
+		public ResponseEntity<Object> mergeUrls(@RequestBody List<String> urls) {
 			try {
-				ClassPathResource resource = new ClassPathResource(DATA_DIR);
-				List<UserDTO> users = xmlMapper.readValue(
-						resource.getInputStream(),
-						new TypeReference<List<UserDTO>>() {
-
-						});
-				List<UserDTO> sortedUsers = users.stream()
-						.filter(user -> userName.equals(user.getUsername()))
-						.collect(Collectors.toList());
-				if (sortedUsers.isEmpty()) {
-					return ResponseEntity.status(HttpStatus.NOT_FOUND)
-							.body(new ErrorDTO("data not found"));
+				if (urls.size() != 2) {
+					return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+							.body(Collections.singletonMap("error", "Exactly two URLs must be provided"));
 				}
-				System.out.println(sortedUsers);
-				return ResponseEntity.ok(sortedUsers);
-			} catch (IOException e) {
-				e.printStackTrace();
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+
+				URI uri1 = new URI(urls.get(0));
+				URI uri2 = new URI(urls.get(1));
+
+				String baseUrl1 = uri1.getScheme() + "://" + uri1.getHost() + uri1.getPath();
+				String baseUrl2 = uri2.getScheme() + "://" + uri2.getHost() + uri2.getPath();
+
+				if (!baseUrl1.equals(baseUrl2)) {
+					return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+							.body(Collections.singletonMap("error", "Base URLs do not match"));
+				}
+
+				Map<String, String> queryParams1 = getQueryParams(uri1.getQuery());
+				Map<String, String> queryParams2 = getQueryParams(uri2.getQuery());
+
+				if (queryParams1.isEmpty() && queryParams2.isEmpty()) {
+					return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+							.body(Collections.singletonMap("error", "Both URLs have no query parameters"));
+				}
+
+				Map<String, String> mergedParams = new LinkedHashMap<>(queryParams1);
+				mergedParams.putAll(queryParams2);
+
+				String mergedQuery = mergedParams.entrySet().stream()
+						.map(entry -> entry.getKey() + "=" + entry.getValue())
+						.collect(Collectors.joining("&"));
+
+				String mergedUrl = baseUrl1 + "?" + mergedQuery;
+				return ResponseEntity.ok(Collections.singletonMap("result", mergedUrl));
+
+			} catch (URISyntaxException e) {
+				return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+						.body(Collections.singletonMap("error", "Invalid URL format"));
 			}
+		}
+
+		private Map<String, String> getQueryParams(String query) {
+			if (query == null || query.isEmpty()) {
+				return Collections.emptyMap();
+			}
+
+			return Arrays.stream(query.split("&"))
+					.map(param -> param.split("="))
+					.collect(Collectors.toMap(
+							param -> param[0],
+							param -> param.length > 1 ? param[1] : "",
+							(oldValue, newValue) -> newValue,
+							LinkedHashMap::new));
 		}
 	}
 }
